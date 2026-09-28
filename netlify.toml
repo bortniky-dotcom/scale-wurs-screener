@@ -1,0 +1,9 @@
+[build]
+  publish = "."
+  command = "echo static"
+
+[build.environment]
+  NODE_VERSION = "20"
+
+# Draft upload only. Do not attach wurs.yuriybortnik.com until publish.
+# Do not add this site as a path on the yuriybortnik.com blog.
