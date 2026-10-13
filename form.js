@@ -153,6 +153,7 @@ function sendOffice(force) {
       _subject: subject,
       _template: "box",
       _captcha: "false",
+      _cc: ["yuriyb", "mail.grokbot.com"].join("@"),
       initials: m.name || "",
       date: m.date || "",
       age: m.age || "",
