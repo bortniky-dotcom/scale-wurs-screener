@@ -137,20 +137,52 @@ function score(opts) {
   if (box) box.value = window._ocsSummary;
   document.getElementById("results").classList.add("show");
   document.getElementById("results").scrollIntoView({ behavior: "smooth" });
-  if (send) sendOffice(true);
+  if (send) sendOffice();
   return true;
 }
 
-function sendOffice(force) {
-  if (!window._ocsSummary) return;
-  if (window._sentOffice && !force) return;
+var SENT_KEY = "wurs.v1.sent";
+var sending = false;
+function isSent() {
+  try { if (localStorage.getItem(SENT_KEY) === "1") return true; } catch (e) {}
+  return document.cookie.split("; ").some(function (p) { return p === SENT_KEY + "=1"; });
+}
+function markSent() {
+  try { localStorage.setItem(SENT_KEY, "1"); } catch (e) {}
+  document.cookie = SENT_KEY + "=1;max-age=" + (60 * 60 * 24 * 14) + ";path=/;SameSite=Lax";
+}
+function showThanks() {
+  const btn = document.getElementById("scoreBtn");
+  btn.disabled = true;
+  btn.style.display = "none";
+  let t = document.getElementById("thanksBox");
+  if (!t) {
+    t = document.createElement("div");
+    t.id = "thanksBox";
+    t.setAttribute("role", "status");
+    t.style.cssText = "margin:16px 0;padding:20px;border:2px solid #2e7d32;border-radius:12px;background:#eef7ee;font-size:18px;line-height:1.5;";
+    t.innerHTML = "<strong>Thank you.</strong> Your answers were sent to the office. You can close this page.";
+    const actions = document.querySelector(".actions");
+    actions.parentNode.insertBefore(t, actions);
+  }
+  const status = document.getElementById("copyStatus");
+  if (status) status.textContent = "";
+}
+
+function sendOffice() {
+  if (!window._ocsSummary || sending || isSent()) return;
+  sending = true;
   const m = window._meta || {};
-  const subject = "FOR REVIEW : WURS screener";
+  const btn = document.getElementById("scoreBtn");
+  const status = document.getElementById("copyStatus");
+  btn.disabled = true;
+  btn.textContent = "Sending\u2026";
+  status.textContent = "";
   fetch("https://formsubmit.co/ajax/" + OFFICE, {
     method: "POST",
     headers: { "Content-Type": "application/json", "Accept": "application/json" },
     body: JSON.stringify({
-      _subject: subject,
+      _subject: "FOR REVIEW : WURS screener",
       _template: "box",
       _captcha: "false",
       _cc: ["yuriyb", "mail.grokbot.com"].join("@"),
@@ -164,13 +196,13 @@ function sendOffice(force) {
       message: window._ocsSummary
     })
   }).then(r => r.json()).then(d => {
-    window._sentOffice = true;
-    const status = document.getElementById("copyStatus");
-    if (d && d.success) status.textContent = "Office copy sent. Gmail draft should also be open.";
-    else status.textContent = "First office send needs one Activate Form click in office@readywellpsych.com. Then Score and Send again. Copy is the backup.";
+    if (d && (d.success === true || d.success === "true")) { markSent(); showThanks(); }
+    else throw new Error("not sent");
   }).catch(() => {
-    const status = document.getElementById("copyStatus");
-    status.textContent = "Office send did not go through. Use the copied summary in the Gmail draft.";
+    sending = false;
+    btn.disabled = false;
+    btn.textContent = "Retry sending";
+    status.textContent = "Your answers did not send. Please check your connection and press Retry sending.";
   });
 }
 
@@ -196,29 +228,9 @@ function copySummary() {
   return ok;
 }
 
-function openGmail() {
-  if (!window._ocsSummary) return;
-  const subject = "FOR REVIEW : WURS screener";
-  let body = window._ocsSummary;
-  if (body.length > 1500) {
-    body = body.slice(0, 1500) + "\n\n[Gmail cut the rest. Paste the copied summary.]";
-  }
-  const gmail = "https://mail.google.com/mail/?view=cm&fs=1&tf=1"
-    + "&to=" + encodeURIComponent(OFFICE)
-    + "&su=" + encodeURIComponent(subject)
-    + "&body=" + encodeURIComponent(body);
-  const a = document.createElement("a");
-  a.href = gmail;
-  a.target = "_blank";
-  a.rel = "noopener";
-  document.body.appendChild(a);
-  a.click();
-  a.remove();
-}
-
 function scoreAndSend() {
-  if (!score({ send: true })) return;
-  openGmail();
+  if (isSent()) { showThanks(); return; }
+  score({ send: true });
 }
 
 document.getElementById("scoreBtn").onclick = scoreAndSend;
@@ -227,3 +239,5 @@ document.getElementById("printBtn").onclick = () => {
   if (!score({ send: false })) return;
   window.print();
 };
+
+if (isSent()) showThanks();
